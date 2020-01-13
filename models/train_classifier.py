@@ -22,9 +22,8 @@ def load_data(database_filepath):
     related_map = {0: 0, 1: 1, 2: 0}
     df['related'] = df['related'].map(related_map).astype('int8')
     
-    X = df.loc[:, 'id':'genre']
+    X = df.loc[:, ['message']]
     Y = df.loc[:, 'related':'direct_report']
-    Y = Y.drop('child_alone', axis=1)
     
     category_names = Y.columns.tolist()
     
@@ -33,6 +32,18 @@ def load_data(database_filepath):
 def tokenize(text):
     tokens = word_tokenize(clean_text)
     return tokens
+
+def find_training_classes_order(model, X, Y):
+    Y_pred = model.predict(X)
+    scores_list = []
+    
+    for i, col_name in enumerate(Y.columns):
+        score = accuracy_score(Y.iloc[:, i], Y_pred[:, i])
+        scores_list.append(score)
+        
+    training_classes_order = list(reversed(np.argsort(scores_list)))
+    
+    return training_classes_order
 
 def build_model():
     text_col = 'message'
@@ -49,6 +60,10 @@ def build_model():
         ('clf', MultiOutputClassifier(LogisticRegression(solver='liblinear', random_state=RANDOM_STATE)))
     ])
     
+#     training_classes_order = find_training_classes_order(pipe, X, Y)
+#     pipe.set_params(clf=ClassifierChain(LogisticRegression(random_state=RANDOM_STATE,
+#                                                            order=training_classes_order)))
+
     return pipe
 
 def evaluate_model(model, X_test, Y_test, category_names):

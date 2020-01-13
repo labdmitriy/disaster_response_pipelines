@@ -1,5 +1,6 @@
 import json
 import plotly
+import numpy as np
 import pandas as pd
 
 from nltk.stem import WordNetLemmatizer
@@ -78,10 +79,12 @@ def index():
 @app.route('/go')
 def go():
     # save user input in query
-    query = request.args.get('query', '') 
+    query = request.args.get('query', '')
+    query_df = pd.DataFrame([query], columns=['message'])
 
     # use model to predict classification for query
-    classification_labels = model.predict([query])[0]
+    classification_labels = model.predict(query_df)[0]
+    print(classification_labels)
     classification_results = dict(zip(df.columns[4:], classification_labels))
 
     # This will render the go.html Please see that file. 

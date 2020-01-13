@@ -17,6 +17,7 @@ def clean_data(df):
     parsed_categories_df = parsed_categories.str[1::2].apply(pd.Series)
     parsed_categories_df = parsed_categories_df.astype('int8')
     parsed_categories_df.columns = parsed_categories.str[0::2].iloc[0]
+    parsed_categories_df = parsed_categories_df.drop('child_alone', axis=1)
     
     # drop original categories column
     df = df.drop('categories', axis=1)
