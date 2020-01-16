@@ -6,8 +6,7 @@ sys.path.insert(0, os.path.abspath('..'))
 from utils.utils import install, MyLogisticRegression
     
 # Download latest version of scikit-learn package (because of very old version in workspace)
-# install('altair vega_datasets')
-
+install('altair')
 
 import json
 import plotly
@@ -22,6 +21,8 @@ from flask import render_template, request, jsonify
 from plotly.graph_objs import Bar
 import joblib
 from sqlalchemy import create_engine
+
+import altair as alt
 
 
 app = Flask(__name__)
@@ -48,41 +49,72 @@ model = joblib.load("../models/classifier.pkl")
 @app.route('/')
 @app.route('/index')
 def index():
+    alt.renderers.set_embed_options(actions=False)
+    alt.data_transformers.disable_max_rows()
     
-    # extract data needed for visuals
-    # TODO: Below is an example - modify to extract data for your own visuals
-    genre_counts = df.groupby('genre').count()['message']
-    genre_names = list(genre_counts.index)
+    genre_classes_df = pd.melt(df.loc[:, 'message':], 
+                               id_vars=['genre', 'message'], 
+                               var_name='class_name', 
+                               value_name='has_class').query('has_class == 1').copy()
+    genre_classes_df['class_name'] = (genre_classes_df['class_name'].str.replace('_', ' ')
+                                                                    .str.capitalize())
+    genre_classes_df['genre'] = genre_classes_df['genre'].str.capitalize()
+    genre_classes_df['message_len'] = genre_classes_df['message'].str.len()
     
-    # create visuals
-    # TODO: Below is an example - modify to create your own visuals
-    graphs = [
-        {
-            'data': [
-                Bar(
-                    x=genre_names,
-                    y=genre_counts
-                )
-            ],
+    class_selection = alt.selection_multi(fields=['class_name'])
+    class_color = alt.condition(class_selection,
+                                alt.value('steelblue'),
+                                alt.value('lightgray'))
 
-            'layout': {
-                'title': 'Distribution of Message Genres',
-                'yaxis': {
-                    'title': "Count"
-                },
-                'xaxis': {
-                    'title': "Genre"
-                }
-            }
-        }
-    ]
+    class_counts_chart = alt.Chart(genre_classes_df).mark_bar().encode(
+        x=alt.X('class_count:Q', title='Number Of Occurences'),
+        y=alt.Y('class_name:N', title='Class Name'),
+        tooltip='class_count:Q',
+        color=class_color
+    ).transform_aggregate(
+        class_count='count()',
+        groupby=['class_name']
+    ).add_selection(
+        class_selection
+    ).properties(
+        width=400
+    )
+
+    genre_counts_chart = alt.Chart(genre_classes_df).mark_bar().encode(
+        x=alt.X('genre_count:Q', title='Number Of Occurences'),
+        y=alt.Y('genre:N', title='Genre Name'),
+        tooltip='genre_count:Q',
+    ).transform_filter(
+        class_selection
+    ).transform_aggregate(
+        genre_count='count()',
+        groupby=['genre']
+    ).properties(
+        width=400
+    )
+
+    message_len_chart = alt.Chart(genre_classes_df).mark_bar().encode(
+        x=alt.X('mean_message_len:Q', title='Mean Message Length'),
+        y=alt.Y('genre:N', title='Genre Name'),
+        tooltip=alt.Tooltip('mean_message_len:Q', format='.0f')
+    ).transform_filter(
+        class_selection
+    ).transform_aggregate(
+        mean_message_len='mean(message_len)',
+        groupby=['genre']
+    ).properties(
+        width=400
+    )
+
+    chart = (class_counts_chart | (genre_counts_chart & message_len_chart)).configure_axis(
+        labelFontSize=14,
+        titleFontSize=14
+    )
     
-    # encode plotly graphs in JSON
-    ids = ["graph-{}".format(i) for i, _ in enumerate(graphs)]
-    graphJSON = json.dumps(graphs, cls=plotly.utils.PlotlyJSONEncoder)
+    chart_json = chart.to_json()
     
     # render web page with plotly graphs
-    return render_template('master.html', ids=ids, graphJSON=graphJSON)
+    return render_template('master.html', viz=chart_json)
 
 
 # web page that handles user query and displays model results
