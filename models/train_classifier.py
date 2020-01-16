@@ -1,17 +1,32 @@
+import subprocess
 import sys
+import nltk
+import warnings
+
+def install(package):
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', package])
+    
+install('scikit-learn')
+nltk.download('stopwords')
+warnings.filterwarnings("ignore")
+
 import pickle
+import joblib
 from sqlalchemy import create_engine
 
+import numpy as np
 import pandas as pd
 from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
 
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
-from sklearn.multioutput import MultiOutputClassifier, ClassifierChain
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.model_selection import train_test_split, KFold, GridSearchCV
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.svm import LinearSVC
+from sklearn.metrics import classification_report
 
 RANDOM_STATE=42
 
@@ -30,22 +45,17 @@ def load_data(database_filepath):
     return X, Y, category_names
 
 def tokenize(text):
-    tokens = word_tokenize(clean_text)
-    return tokens
+    tokens = word_tokenize(text)
+    lemmatizer = WordNetLemmatizer()
 
-def find_training_classes_order(model, X, Y):
-    Y_pred = model.predict(X)
-    scores_list = []
-    
-    for i, col_name in enumerate(Y.columns):
-        score = accuracy_score(Y.iloc[:, i], Y_pred[:, i])
-        scores_list.append(score)
-        
-    training_classes_order = list(reversed(np.argsort(scores_list)))
-    
-    return training_classes_order
+    clean_tokens = []
+    for tok in tokens:
+        clean_tok = lemmatizer.lemmatize(tok).lower().strip()
+        clean_tokens.append(clean_tok)
 
-def build_model():
+    return clean_tokens
+
+def build_model():    
     text_col = 'message'
     text_pipe = Pipeline([
         ('tfidf', TfidfVectorizer())
@@ -57,35 +67,43 @@ def build_model():
 
     pipe = Pipeline([
         ('preprocess', preproc_pipe),
-        ('clf', MultiOutputClassifier(LogisticRegression(solver='liblinear', random_state=RANDOM_STATE)))
+        ('clf', MultiOutputClassifier(LinearSVC(random_state=RANDOM_STATE)))
     ])
     
-#     training_classes_order = find_training_classes_order(pipe, X, Y)
-#     pipe.set_params(clf=ClassifierChain(LogisticRegression(random_state=RANDOM_STATE,
-#                                                            order=training_classes_order)))
+    param_grid = {
+        'clf__estimator__C': [0.1], #np.logspace(-2, 0, 3),
+        'clf__estimator__loss': ['squared_hinge'], #['hinge', 'squared_hinge'], 
+        'clf__estimator__multi_class': ['crammer_singer'], 
+        'clf__estimator__class_weight': [None], #[None, 'balanced'],
 
-    return pipe
+        'preprocess__text__tfidf__analyzer': ['word'],
+        'preprocess__text__tfidf__ngram_range': [(1, 1)], 
+        'preprocess__text__tfidf__max_features': [20000], 
+        'preprocess__text__tfidf__tokenizer': [tokenize],
+        'preprocess__text__tfidf__token_pattern': ['(?u)\\b\\w\\w+\\b'], 
+        'preprocess__text__tfidf__stop_words': [stopwords.words()], 
+        'preprocess__text__tfidf__min_df': [1], 
+        'preprocess__text__tfidf__max_df': [0.7],
+        'preprocess__text__tfidf__lowercase': [False],
+        'preprocess__text__tfidf__binary': [False], 
+        'preprocess__text__tfidf__use_idf': [True],
+        'preprocess__text__tfidf__smooth_idf': [True],
+        'preprocess__text__tfidf__sublinear_tf': [True],
+    }
+
+    cv = KFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
+    grid_search = GridSearchCV(pipe, param_grid, scoring='f1_samples',
+                               cv=cv, verbose=0, n_jobs=-1)
+
+    return grid_search
 
 def evaluate_model(model, X_test, Y_test, category_names):
     Y_pred_test = model.predict(X_test)
-
-    average_modes = ['micro', 'macro', 'samples', 'weighted']
-
-    print('Accuracy: ', accuracy_score(Y_test, Y_pred_test), '\n')
-    
-    for average in average_modes:
-        print(average)
-        print('F1 score: ', f1_score(Y_test, Y_pred_test, average=average, zero_division=0))
-        print('Precision score: ', precision_score(Y_test, Y_pred_test, average=average, zero_division=0))
-        print('Recall score: ', recall_score(Y_test, Y_pred_test, average=average, zero_division=0), '\n')
-        
-    for i, col_name in enumerate(category_names):
-        print(col_name)
-        print(classification_report(Y_test.iloc[:, i], Y_pred_test[:, i], zero_division=0))
+    print(classification_report(Y_test, Y_pred_test, zero_division=0))
 
 def save_model(model, model_filepath):
     with open(model_filepath, 'wb') as f:
-        pickle.dump(model, f)
+        joblib.dump(model, f)
         
 def main():
     if len(sys.argv) == 3:
