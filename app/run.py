@@ -1,3 +1,14 @@
+import os
+import sys
+import subprocess
+
+sys.path.insert(0, os.path.abspath('..'))
+from utils.utils import install, MyLogisticRegression
+    
+# Download latest version of scikit-learn package (because of very old version in workspace)
+# install('altair vega_datasets')
+
+
 import json
 import plotly
 import numpy as np
