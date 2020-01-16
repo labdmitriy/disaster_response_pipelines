@@ -1,14 +1,14 @@
 import subprocess
 import sys
-import nltk
 import warnings
+
+warnings.filterwarnings("ignore")
 
 def install(package):
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', package])
     
+# Download latest version of scikit-learn package (because of very old version in workspace)
 install('scikit-learn')
-nltk.download('stopwords')
-warnings.filterwarnings("ignore")
 
 import pickle
 import joblib
@@ -18,17 +18,49 @@ import numpy as np
 import pandas as pd
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
-from nltk.corpus import stopwords
 
 from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split, KFold, GridSearchCV
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.svm import LinearSVC
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
 RANDOM_STATE=42
+
+class MyLogisticRegression(LogisticRegression):
+    def __init__(self, penalty='l2', dual=False, tol=1e-4, C=1.0,
+                 fit_intercept=True, intercept_scaling=1, class_weight=None,
+                 random_state=None, solver='lbfgs', max_iter=100,
+                 multi_class='auto', verbose=0, warm_start=False, n_jobs=None,
+                 l1_ratio=None):
+        self._single_class_label = None
+        super().__init__(penalty=penalty, dual=dual, tol=tol, C=C,
+                         fit_intercept=fit_intercept, intercept_scaling=intercept_scaling, class_weight=class_weight,
+                         random_state=random_state, solver=solver, max_iter=max_iter,
+                         multi_class=multi_class, verbose=verbose, warm_start=warm_start, n_jobs=n_jobs,
+                         l1_ratio=l1_ratio)
+
+    @staticmethod
+    def _has_only_one_class(y):
+        return len(np.unique(y)) == 1
+
+    def _fitted_on_single_class(self):
+        return self._single_class_label is not None
+
+    def fit(self, X, y=None):
+        if self._has_only_one_class(y):
+            self._single_class_label = y[0]
+            self.classes_ = np.unique(y)
+        else:
+            super().fit(X, y)
+        return self
+
+    def predict(self, X):
+        if self._fitted_on_single_class():
+            return np.full(X.shape[0], self._single_class_label)
+        else:
+            return super().predict(X)
 
 def load_data(database_filepath):
     engine = create_engine(f'sqlite:///{database_filepath}')
@@ -37,7 +69,7 @@ def load_data(database_filepath):
     related_map = {0: 0, 1: 1, 2: 0}
     df['related'] = df['related'].map(related_map).astype('int8')
     
-    X = df.loc[:, ['message']]
+    X = df.loc[:, 'message']
     Y = df.loc[:, 'related':'direct_report']
     
     category_names = Y.columns.tolist()
@@ -49,6 +81,7 @@ def tokenize(text):
     lemmatizer = WordNetLemmatizer()
 
     clean_tokens = []
+    
     for tok in tokens:
         clean_tok = lemmatizer.lemmatize(tok).lower().strip()
         clean_tokens.append(clean_tok)
@@ -56,50 +89,41 @@ def tokenize(text):
     return clean_tokens
 
 def build_model():    
-    text_col = 'message'
-    text_pipe = Pipeline([
-        ('tfidf', TfidfVectorizer())
-    ])
-
-    preproc_pipe = ColumnTransformer([
-        ('text', text_pipe, text_col)
-    ], n_jobs=-1)
-
     pipe = Pipeline([
-        ('preprocess', preproc_pipe),
-        ('clf', MultiOutputClassifier(LinearSVC(random_state=RANDOM_STATE)))
+        ('vec', TfidfVectorizer()),
+        ('clf', MultiOutputClassifier(MyLogisticRegression(random_state=RANDOM_STATE), n_jobs=1))
     ])
     
     param_grid = {
-        'clf__estimator__C': [0.1], #np.logspace(-2, 0, 3),
-        'clf__estimator__loss': ['squared_hinge'], #['hinge', 'squared_hinge'], 
-        'clf__estimator__multi_class': ['crammer_singer'], 
+        'clf__estimator': [MyLogisticRegression(random_state=RANDOM_STATE, solver='liblinear')],
+        'clf__estimator__C': [1], #np.logspace(-2, 2, 5),
         'clf__estimator__class_weight': [None], #[None, 'balanced'],
 
-        'preprocess__text__tfidf__analyzer': ['word'],
-        'preprocess__text__tfidf__ngram_range': [(1, 1)], 
-        'preprocess__text__tfidf__max_features': [20000], 
-        'preprocess__text__tfidf__tokenizer': [tokenize],
-        'preprocess__text__tfidf__token_pattern': ['(?u)\\b\\w\\w+\\b'], 
-        'preprocess__text__tfidf__stop_words': [stopwords.words()], 
-        'preprocess__text__tfidf__min_df': [1], 
-        'preprocess__text__tfidf__max_df': [0.7],
-        'preprocess__text__tfidf__lowercase': [False],
-        'preprocess__text__tfidf__binary': [False], 
-        'preprocess__text__tfidf__use_idf': [True],
-        'preprocess__text__tfidf__smooth_idf': [True],
-        'preprocess__text__tfidf__sublinear_tf': [True],
+        'vec__analyzer': ['word'],
+        'vec__ngram_range': [(1, 1)], 
+        'vec__max_features': [None], 
+        'vec__tokenizer': [tokenize],
+        'vec__token_pattern': ['(?u)\\b\\w\\w+\\b'], 
+        'vec__stop_words': [None], 
+        'vec__min_df': [1], 
+        'vec__max_df': [0.6],
+        'vec__lowercase': [False],
+        'vec__binary': [True], 
+        'vec__use_idf': [False],
+        'vec__smooth_idf': [False],
+        'vec__sublinear_tf': [False],
     }
 
     cv = KFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
     grid_search = GridSearchCV(pipe, param_grid, scoring='f1_samples',
-                               cv=cv, verbose=0, n_jobs=-1)
+                               cv=cv, verbose=1, n_jobs=1)
 
     return grid_search
 
 def evaluate_model(model, X_test, Y_test, category_names):
     Y_pred_test = model.predict(X_test)
-    print(classification_report(Y_test, Y_pred_test, zero_division=0))
+    print(classification_report(Y_test, Y_pred_test,
+                                target_names=Y_test.columns.tolist()))
 
 def save_model(model, model_filepath):
     with open(model_filepath, 'wb') as f:

@@ -9,7 +9,7 @@ from nltk.tokenize import word_tokenize
 from flask import Flask
 from flask import render_template, request, jsonify
 from plotly.graph_objs import Bar
-from sklearn.externals import joblib
+import joblib
 from sqlalchemy import create_engine
 
 
@@ -32,7 +32,6 @@ df = pd.read_sql_table('DisasterData', engine)
 
 # load model
 model = joblib.load("../models/classifier.pkl")
-
 
 # index webpage displays cool visuals and receives user input text for model
 @app.route('/')
@@ -80,10 +79,9 @@ def index():
 def go():
     # save user input in query
     query = request.args.get('query', '')
-    query_df = pd.DataFrame([query], columns=['message'])
 
     # use model to predict classification for query
-    classification_labels = model.predict(query_df)[0]
+    classification_labels = model.predict([query])[0]
     print(classification_labels)
     classification_results = dict(zip(df.columns[4:], classification_labels))
 
