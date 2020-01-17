@@ -37,9 +37,9 @@ Multilabel classification model was built and used at the backend of the dashboa
     - Saved model (classifier.pkl) and code for model training (train_classifier.py)
 - notebooks/
     - Jupyter notebooks with intermediate preparation steps (ETL Pipeline Preparation.ipynb, ML Pipeline Preparation.ipynb) and full EDA, pipeline and visualization
-- orig_data
+- orig_data/
     - Original data provided by Figure Eight project
-- utils
+- utils/
     - Package with helper functions 
 - LICENSE.md
     - License file
