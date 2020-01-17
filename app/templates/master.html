@@ -70,7 +70,18 @@
          <div id="vis"></div>
       </div>
       <div class="col-lg-6">
-         <div id="vis-2"></div>
+         <div class="row">
+           <div id="vis-2"></div>
+         </div>
+         <div class="row" style='margin-top: 15px;'>
+           <div id="wc-1"></div>
+         </div>
+         <div class="row" style='margin-top: 15px;'>
+           <div id="wc-2"></div>
+         </div>
+         <div class="row" style='margin-top: 15px;'>
+           <div id="wc-3"></div>
+         </div>
       </div>
     </div>
 </div>
@@ -87,6 +98,21 @@
   
   var spec_2 = {{viz_2 | safe}};
   vegaEmbed('#vis-2', spec_2, opt).then(function(result) {
+    // Access the Vega view instance (https://vega.github.io/vega/docs/api/view/) as result.view
+  }).catch(console.error);
+  
+  var wc_1 = {{wc_1 | safe}};
+  vegaEmbed('#wc-1', wc_1, opt).then(function(result) {
+    // Access the Vega view instance (https://vega.github.io/vega/docs/api/view/) as result.view
+  }).catch(console.error);
+  
+   var wc_2 = {{wc_2 | safe}};
+  vegaEmbed('#wc-2', wc_2, opt).then(function(result) {
+    // Access the Vega view instance (https://vega.github.io/vega/docs/api/view/) as result.view
+  }).catch(console.error);
+  
+   var wc_3 = {{wc_3 | safe}};
+  vegaEmbed('#wc-3', wc_3, opt).then(function(result) {
     // Access the Vega view instance (https://vega.github.io/vega/docs/api/view/) as result.view
   }).catch(console.error);
 </script>
