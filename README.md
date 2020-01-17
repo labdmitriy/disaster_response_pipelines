@@ -10,7 +10,7 @@ Multilabel classification model was built and used at the backend of the dashboa
 ![Index Page](images/index_page.png?raw=true "Index Page")
 ![Go Page](images/go_page.PNG?raw=true "Go Page")
 
-## Deployment Instructions:
+## Deployment Instructions
 1. Run the following command to install the latest versions of Scikit-Learn and Altair packages (**required step**):  
     `pip install -U scikit-learn altair`  
     
