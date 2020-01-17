@@ -21,7 +21,7 @@ Multilabel classification model was built and used at the backend of the dashboa
     - To run ML pipeline that trains classifier and saves:  
         `python models/train_classifier.py data/DisasterResponse.db models/classifier.pkl`
 
-3. Run the following command in the app's directory to run your web app.
+3. Run the following command in the app's directory to run your web app:  
     `python run.py`
 
 4. Go to http://0.0.0.0:3001/
