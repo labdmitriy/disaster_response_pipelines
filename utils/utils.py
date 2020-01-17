@@ -1,14 +1,20 @@
 import sys
 import subprocess
 
+import importlib
+
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
 
-def install(package):
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', package])
+def install(package, import_name=None):
+    if import_name is None:
+        import_name = package
+        
+    subprocess.check_call(['pip', 'install', '-U', package])
+#     subprocess.check_call(['conda', 'install', '-y', package])
+#     globals()[import_name] = importlib.import_module(import_name)
 
-    
 class MyLogisticRegression(LogisticRegression):
     def __init__(self, penalty='l2', dual=False, tol=1e-4, C=1.0,
                  fit_intercept=True, intercept_scaling=1, class_weight=None,

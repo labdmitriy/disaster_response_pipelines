@@ -1,13 +1,9 @@
 import os
 import sys
-import subprocess
 
 sys.path.insert(0, os.path.abspath('..'))
 from utils.utils import install, MyLogisticRegression
     
-# Download latest version of scikit-learn package (because of very old version in workspace)
-install('altair')
-
 import json
 import plotly
 import numpy as np
@@ -52,40 +48,38 @@ def index():
     alt.renderers.set_embed_options(actions=False)
     alt.data_transformers.disable_max_rows()
     
-    genre_classes_df = pd.melt(df.loc[:, 'message':], 
-                               id_vars=['genre', 'message'], 
+    genre_classes_df = pd.melt(df,
+                               id_vars=['id', 'genre', 'message'], 
                                var_name='class_name', 
-                               value_name='has_class').query('has_class == 1').copy()
+                               value_name='has_class')#.query('has_class == 1').copy()
     genre_classes_df['class_name'] = (genre_classes_df['class_name'].str.replace('_', ' ')
                                                                     .str.capitalize())
     genre_classes_df['genre'] = genre_classes_df['genre'].str.capitalize()
     genre_classes_df['message_len'] = genre_classes_df['message'].str.len()
+    
+    classes_df = genre_classes_df.query('has_class == 1').copy()
+    genres_df = genre_classes_df.drop_duplicates('id')
     
     class_selection = alt.selection_multi(fields=['class_name'])
     class_color = alt.condition(class_selection,
                                 alt.value('steelblue'),
                                 alt.value('lightgray'))
 
-    class_counts_chart = alt.Chart(genre_classes_df).mark_bar().encode(
+    class_counts_chart = alt.Chart(classes_df).mark_bar().encode(
         x=alt.X('class_count:Q', title='Number Of Occurences'),
-        y=alt.Y('class_name:N', title='Class Name'),
+        y=alt.Y('class_name:N', sort='-x', title='Class Name'),
         tooltip='class_count:Q',
-        color=class_color
     ).transform_aggregate(
         class_count='count()',
         groupby=['class_name']
-    ).add_selection(
-        class_selection
     ).properties(
         width=400
     )
 
-    genre_counts_chart = alt.Chart(genre_classes_df).mark_bar().encode(
+    genre_counts_chart = alt.Chart(genres_df).mark_bar().encode(
         x=alt.X('genre_count:Q', title='Number Of Occurences'),
-        y=alt.Y('genre:N', title='Genre Name'),
+        y=alt.Y('genre:N', sort='-x', title='Genre Name'),
         tooltip='genre_count:Q',
-    ).transform_filter(
-        class_selection
     ).transform_aggregate(
         genre_count='count()',
         groupby=['genre']
@@ -93,12 +87,10 @@ def index():
         width=400
     )
 
-    message_len_chart = alt.Chart(genre_classes_df).mark_bar().encode(
+    message_len_chart = alt.Chart(genres_df).mark_bar().encode(
         x=alt.X('mean_message_len:Q', title='Mean Message Length'),
-        y=alt.Y('genre:N', title='Genre Name'),
+        y=alt.Y('genre:N', sort='-x', title='Genre Name'),
         tooltip=alt.Tooltip('mean_message_len:Q', format='.0f')
-    ).transform_filter(
-        class_selection
     ).transform_aggregate(
         mean_message_len='mean(message_len)',
         groupby=['genre']
@@ -106,15 +98,20 @@ def index():
         width=400
     )
 
-    chart = (class_counts_chart | (genre_counts_chart & message_len_chart)).configure_axis(
+    chart = (class_counts_chart).configure_axis(
         labelFontSize=14,
         titleFontSize=14
     )
-    
     chart_json = chart.to_json()
     
+    chart_2 = (genre_counts_chart & message_len_chart).configure_axis(
+        labelFontSize=14,
+        titleFontSize=14
+    )
+    chart_2_json = chart_2.to_json()
+    
     # render web page with plotly graphs
-    return render_template('master.html', viz=chart_json)
+    return render_template('master.html', viz=chart_json, viz_2=chart_2_json)
 
 
 # web page that handles user query and displays model results

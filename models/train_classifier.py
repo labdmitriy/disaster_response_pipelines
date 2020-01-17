@@ -1,15 +1,11 @@
 import os
 import sys
-import subprocess
 import warnings
 
-sys.path.insert(0, os.path.abspath('..'))
 warnings.filterwarnings("ignore")
 
+sys.path.insert(0, os.path.abspath('..'))
 from utils.utils import install, MyLogisticRegression
-
-# Download latest version of scikit-learn package (because of very old version in workspace)
-install('scikit-learn')
 
 import joblib
 from sqlalchemy import create_engine
